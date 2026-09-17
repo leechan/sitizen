@@ -1,0 +1,201 @@
+import SwiftUI
+
+/// 倒计时结束后的「锁屏」。
+///
+/// 全屏、拦截输入。视觉上是一次完整的品牌亮相：
+/// 背景一片琥珀光 → 巨大的幽灵水印 → 大号极细数字 → 底部漂浮胶囊按钮。
+struct LockView: View {
+    @ObservedObject var state: AppState
+    @ObservedObject var settings: SettingsStore
+
+    /// 只有主显示器的窗口有解锁按钮，其他屏幕显示提示。
+    var isPrimary: Bool = true
+
+    @State private var lineIndex = 0
+    @State private var confirming = false
+    @State private var taunt = ""
+    @State private var confirmResetWork: DispatchWorkItem?
+
+    private let lineTimer = Timer.publish(every: 9, on: .main, in: .common).autoconnect()
+
+    private var total: TimeInterval { state.standTotal }
+    private var remaining: TimeInterval { min(max(0, state.displayRemaining), total) }
+    private var progress: Double { min(1, max(0, remaining / total)) }
+    private var seconds: Int { max(0, Int(remaining.rounded(.up))) }
+
+    private var lines: [String] { Copy.lock(settings.sass) }
+    private var currentLine: String {
+        let pool = lines
+        guard !pool.isEmpty else { return "" }
+        return pool[lineIndex % pool.count]
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let k = min(1.0, max(0.55, geo.size.height / 900))
+
+            ZStack {
+                AmbientBackdrop(intensity: isPrimary ? 1.0 : 0.7)
+
+                GhostWordmark(text: "Sitizen", size: geo.size.width * 0.30)
+                    .offset(y: -geo.size.height * 0.30)
+
+                VStack(spacing: 0) {
+                    Spacer(minLength: 10)
+
+                    ButtMark()
+                        .frame(
+                            width: (isPrimary ? 232 : 168) * k,
+                            height: (isPrimary ? 232 : 168) * k
+                        )
+                        .shadow(color: Palette.accent.opacity(0.35), radius: 40 * k)
+
+                    TrackedLabel(
+                        text: isPrimary ? "休息中 · BREAK" : "休息中",
+                        size: 11 * k,
+                        color: Palette.accent.opacity(0.9)
+                    )
+                    .padding(.top, 24 * k)
+
+                    Text(Copy.lockTitle)
+                        .font(.display((isPrimary ? 60 : 44) * k, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.top, 10 * k)
+
+                    if isPrimary {
+                        Text(currentLine)
+                            .font(.system(size: 15 * k, weight: .medium))
+                            .tracking(1.2)
+                            .foregroundStyle(Palette.dim)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: 540)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 14 * k)
+                            .id(currentLine)
+                            .transition(.opacity)
+                            .animation(.easeInOut(duration: 0.4), value: currentLine)
+                    }
+
+                    clock(scale: k)
+                        .padding(.top, (isPrimary ? 40 : 26) * k)
+
+                    Spacer(minLength: 10)
+
+                    footer(scale: k)
+                }
+                .frame(width: geo.size.width, height: geo.size.height)
+            }
+        }
+        .ignoresSafeArea()
+        .onReceive(lineTimer) { _ in
+            guard isPrimary, !confirming else { return }
+            lineIndex += 1
+        }
+    }
+
+    // MARK: - 剩余时间：两个大号数字块 + 小标签
+
+    private func clock(scale k: CGFloat) -> some View {
+        VStack(spacing: 20 * k) {
+            HStack(alignment: .top, spacing: 34 * k) {
+                NumeralBlock(
+                    value: String(format: "%02d", seconds / 60),
+                    label: "分",
+                    numeralSize: (isPrimary ? 92 : 64) * k,
+                    labelSize: 10 * k,
+                    weight: .regular
+                )
+                NumeralBlock(
+                    value: String(format: "%02d", seconds % 60),
+                    label: "秒",
+                    numeralSize: (isPrimary ? 92 : 64) * k,
+                    labelSize: 10 * k,
+                    weight: .regular
+                )
+            }
+
+            MicroProgress(progress: progress, width: (isPrimary ? 300 : 220) * k)
+        }
+    }
+
+    // MARK: - 底部
+
+    @ViewBuilder
+    private func footer(scale k: CGFloat) -> some View {
+        VStack(spacing: 16 * k) {
+            if isPrimary {
+                if settings.allowSurrender {
+                    if confirming {
+                        Text(taunt)
+                            .font(.system(size: 14 * k, weight: .semibold))
+                            .foregroundStyle(Palette.accent)
+                            .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    }
+
+                    FloatingPill {
+                        PillButton(
+                            title: confirming
+                                ? Copy.surrenderConfirm(settings.sass)
+                                : Copy.surrenderButton(settings.sass),
+                            kind: confirming ? .solid : .ghost,
+                            scale: k
+                        ) {
+                            primaryTapped()
+                        }
+
+                        if confirming {
+                            Button {
+                                resetConfirm()
+                            } label: {
+                                Text(Copy.surrenderCancel)
+                                    .font(.system(size: 14 * k, weight: .medium))
+                                    .foregroundStyle(Palette.dim)
+                                    .padding(.horizontal, 18 * k)
+                            }
+                            .buttonStyle(.plain)
+                            .transition(.opacity)
+                        }
+                    }
+                    .animation(.spring(response: 0.35, dampingFraction: 0.8), value: confirming)
+                } else {
+                    TrackedLabel(text: "本次休息结束后自动解锁", size: 11 * k, color: Palette.dim, weight: .medium)
+                }
+
+                Text("解锁后立刻开始下一轮久坐倒计时")
+                    .font(.system(size: 11 * k, weight: .medium))
+                    .tracking(0.8)
+                    .foregroundStyle(Palette.faint)
+            } else {
+                TrackedLabel(text: "请到主显示器上解锁", size: 12 * k, color: Palette.dim, weight: .medium)
+            }
+        }
+        .padding(.bottom, 44 * k)
+    }
+
+    // MARK: - 认输两步确认
+
+    private func primaryTapped() {
+        if confirming {
+            // 直接认输退出。不要在这里把 confirming 置回 false，
+            // 否则浮层消失前会先闪一下初始态。
+            confirmResetWork?.cancel()
+            state.surrender()
+            return
+        }
+
+        SoundPlayer.shared.play(.click)
+        let pool = Copy.surrenderTaunt(settings.sass)
+        taunt = pool.randomElement().map { Copy.renderDuration($0, remaining: remaining) } ?? ""
+        confirming = true
+
+        let work = DispatchWorkItem { confirming = false }
+        confirmResetWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 7, execute: work)
+    }
+
+    private func resetConfirm() {
+        confirmResetWork?.cancel()
+        confirming = false
+        SoundPlayer.shared.play(.click)
+    }
+}

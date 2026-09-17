@@ -1,0 +1,10 @@
+.build/
+.swiftpm/
+dist/
+previews/
+marketing/
+snapshots/
+.DS_Store
+Resources/AppIcon.icns
+Resources/icon.iconset/
+*.dmg
