@@ -196,7 +196,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         let alert = NSAlert()
         alert.messageText = "Sitizen \(AppInfo.version)"
         alert.informativeText = """
-        \(AppInfo.tagline)。一个会让你的屁股和椅子都不满意的应用。
+        \(AppInfo.tagline)。一个会让你的屁股和椅子分离的应用。
 
         默认 45 分钟久坐 + 5 分钟起立。
         最后 \(Int(settings.warningSeconds)) 秒全屏透明倒计时，到点直接锁屏。
