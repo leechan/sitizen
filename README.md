@@ -44,10 +44,7 @@ Sitizen 是一个常驻菜单栏的久坐提醒：**默认 45 分钟久坐 + 5 �
 
 ### 3. 节奏全由你定
 
-![设置](assets/1.png)
-
-久坐 1–180 分钟、起立 1–60 分钟、提前预警 3–30 秒。−/+ 微调加一根够粗的滑杆，拖动不会误拖窗口。
----
+<img src="assets/1.png" alt="设置" width="350">
 
 ## 安装
 
@@ -140,18 +137,6 @@ Sitizen --snapshot <目录>                   # 抓取真实 AppKit 窗口
 锁屏窗口同样是无边框，但 `level = .screenSaver`（1000）、`collectionBehavior` 包含 `.canJoinAllSpaces` 和 `.fullScreenAuxiliary`，每块屏幕各一个窗口，并激活 App 拿到键盘焦点。键盘层面用 `performKeyEquivalent` 加 `NSEvent` 本地监听，吞掉所有 ⌘ 组合键和 Esc。
 
 这是覆盖层而不是系统级锁屏——⌘Tab 仍然能切到别的 App（但浮层在所有 Space 之上不会消失），也不会出现「解不开」的情况。这是有意的取舍。
-
-### 踩过的坑
-
-几个值得记下来的问题，都有注释留在代码里：
-
-- **`@Published` 是 `willSet` 发值**——在订阅回调里直接读属性会拿到旧值。改久坐时长这类逻辑必须用透传进来的新值。
-- **Combine 的 `RunLoop.main` 调度器只在 `.default` 模式投递**——菜单展开时 run loop 切到 `eventTracking`，菜单栏倒计时会「冻住」。换成挂 `.common` 的定时器。
-- **`isMovableByWindowBackground` 会吃掉滑杆拖动**——在控件上拖会变成拖窗口。关掉它，并去掉 `fullSizeContentView` 好让标题栏能正常拖。
-- **Finder 的背景图按 1:1 像素铺，从不缩放**——DMG 背景必须按 1x 输出，尺寸严格等于窗口内容区，否则图标和箭头对不上。视网膜清晰度靠 1x + 2x 合并成多分辨率 TIFF。
-- **`ImageRenderer` 画不出 AppKit 原生控件**——离屏渲染时 `Toggle` 会变成黄色占位方块。所以设置页的开关是自绘的。
-
----
 
 ## 项目结构
 
