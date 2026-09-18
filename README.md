@@ -76,7 +76,7 @@ Sitizen 没有 Dock 图标，它住在菜单栏右上角。第一次启动会自
 只需要 Xcode 命令行工具，不需要 `.xcodeproj`——整个项目是一个 Swift Package。
 
 ```bash
-git clone https://github.com/<你的用户名>/sitizen.git
+git clone https://github.com/leechan/sitizen.git
 cd sitizen
 make run          # 直接跑起来
 ```
