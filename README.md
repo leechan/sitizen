@@ -1,7 +1,7 @@
 <div align="center">
   <img src="assets/icon.png" width="128" alt="Sitizen">
   <h1>Sitizen</h1>
-  <p><b>你的久坐对手</b> · 一个会对你屁股不满意的 macOS 菜单栏应用</p>
+  <p><b>你的久坐对手</b> · 一个会让你的屁股和椅子分离的MacOS应用</p>
   <p>
     <img src="https://img.shields.io/badge/macOS-14%2B-000" alt="macOS 14+">
     <img src="https://img.shields.io/badge/Swift-5.9%2B-F05138?logo=swift&logoColor=white" alt="Swift 5.9+">
