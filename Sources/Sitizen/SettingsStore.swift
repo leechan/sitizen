@@ -46,6 +46,7 @@ final class SettingsStore: ObservableObject {
         static let surrender = "allowSurrender"
         static let autoPause = "autoPauseWhenAway"
         static let launch = "launchAtLogin"
+        static let stay = "stayUntilDismissed"
     }
 
     private let defaults: UserDefaults
@@ -85,6 +86,11 @@ final class SettingsStore: ObservableObject {
         didSet { persist() }
     }
 
+    /// 休息结束后停留在锁屏页，等用户点一下才开始下一轮（默认关闭）
+    @Published var stayUntilDismissed: Bool {
+        didSet { persist() }
+    }
+
     /// 开机启动
     @Published var launchAtLogin: Bool {
         didSet {
@@ -102,6 +108,7 @@ final class SettingsStore: ObservableObject {
         soundEnabled = defaults.object(forKey: Key.sound) as? Bool ?? true
         allowSurrender = defaults.object(forKey: Key.surrender) as? Bool ?? true
         autoPauseWhenAway = defaults.object(forKey: Key.autoPause) as? Bool ?? true
+        stayUntilDismissed = defaults.object(forKey: Key.stay) as? Bool ?? false
         launchAtLogin = defaults.object(forKey: Key.launch) as? Bool ?? false
 
         // 首次启动时同步一次真实状态，避免用户手动改过之后对不上。
@@ -118,6 +125,7 @@ final class SettingsStore: ObservableObject {
         defaults.set(soundEnabled, forKey: Key.sound)
         defaults.set(allowSurrender, forKey: Key.surrender)
         defaults.set(autoPauseWhenAway, forKey: Key.autoPause)
+        defaults.set(stayUntilDismissed, forKey: Key.stay)
         defaults.set(launchAtLogin, forKey: Key.launch)
     }
 }

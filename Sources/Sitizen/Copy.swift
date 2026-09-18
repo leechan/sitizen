@@ -148,6 +148,44 @@ enum Copy {
         }
     }
 
+    // MARK: - 站满之后（开启了「休息结束后停留」时显示）
+
+    static func finished(_ level: SassLevel) -> [String] {
+        switch level {
+        case .mild:
+            return [
+                "这一轮站满了，坐吧。",
+                "辛苦了，接下来继续加油。",
+                "做得好。下一轮见。",
+                "休息够了，随时可以开始。"
+            ]
+        case .cheeky:
+            return [
+                "行了，坐下吧，我批准了。",
+                "这一仗你赢了。暂时。",
+                "站满的人才有资格坐下。",
+                "看在你站满的份上，这次不骂你。",
+                "难得。值得记一笔。"
+            ]
+        case .savage:
+            return [
+                "站满了？稀奇。",
+                "这次算你赢。下一轮再说。",
+                "很好，你还记得自己是个人类。",
+                "坐吧。反正四十五分钟后我们还会见。",
+                "别得意，这才一轮。"
+            ]
+        }
+    }
+
+    static func dismissButton(_ level: SassLevel) -> String {
+        switch level {
+        case .mild: return "开始下一轮"
+        case .cheeky: return "好，继续坐着吧"
+        case .savage: return "行，开始下一轮"
+        }
+    }
+
     // MARK: - 其它
 
     static let lockTitle = "站起来！"

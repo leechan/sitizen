@@ -69,7 +69,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
         let tint: NSColor
         switch phase {
-        case .warning, .standing: tint = NSColor(Palette.accent)
+        case .warning, .standing, .awaitingDismiss: tint = NSColor(Palette.accent)
         case .idle: tint = .secondaryLabelColor
         case .sitting: tint = .labelColor
         }
@@ -101,8 +101,12 @@ final class MenuBarController: NSObject, NSMenuDelegate {
 
         menu.addItem(.separator())
 
-        let toggleTitle = state.phase == .idle ? "开始" : "暂停"
-        menu.addItem(item(toggleTitle, #selector(toggle), key: "p"))
+        if state.phase == .awaitingDismiss {
+            menu.addItem(item("开始下一轮久坐", #selector(dismissBreak), key: "p"))
+        } else {
+            let toggleTitle = state.phase == .idle ? "开始" : "暂停"
+            menu.addItem(item(toggleTitle, #selector(toggle), key: "p"))
+        }
         menu.addItem(item("现在就去站一会儿", #selector(standUpNow), key: "s"))
         menu.addItem(item("重新开始本轮", #selector(restartRound), key: "r"))
 
@@ -140,6 +144,8 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             return "要起来了 · \(clock(state.remaining))"
         case .standing:
             return "站着呢 · 还剩 \(clock(state.remaining))"
+        case .awaitingDismiss:
+            return "休息结束 · 等你说开始"
         }
     }
 
@@ -154,6 +160,10 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     @objc private func toggle() {
         state.toggle()
         SoundPlayer.shared.play(.click)
+    }
+
+    @objc private func dismissBreak() {
+        state.dismissBreak()
     }
 
     @objc private func standUpNow() {
@@ -194,6 +204,8 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         你坐出来的问题，只能靠站起来解决。
 
         作者：夜漫长
+
+        特别感谢 kyc，他参与了 Sitizen 最早期版本的测试，并提出了宝贵功能建议。
         """
         alert.alertStyle = .informational
         alert.addButton(withTitle: "知道了")

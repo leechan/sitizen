@@ -172,6 +172,12 @@ struct SettingsContent: View {
                 Hairline(color: PaperPalette.hairline)
                 ToggleRow(title: "允许认输解锁", subtitle: "关掉之后，休息时间就只能站满", isOn: $settings.allowSurrender)
                 Hairline(color: PaperPalette.hairline)
+                ToggleRow(
+                    title: "休息结束后停留",
+                    subtitle: "站满后停在锁屏页，点一下才开始下一轮",
+                    isOn: $settings.stayUntilDismissed
+                )
+                Hairline(color: PaperPalette.hairline)
                 ToggleRow(title: "休眠 / 锁屏时自动暂停", subtitle: "人都不在了，就不算久坐", isOn: $settings.autoPauseWhenAway)
                 Hairline(color: PaperPalette.hairline)
                 ToggleRow(

@@ -9,6 +9,7 @@ final class AppState: ObservableObject {
         case sitting    // 久坐倒计时中
         case warning    // 最后 N 秒，全屏透明预警
         case standing   // 起立休息中，屏幕已锁定
+        case awaitingDismiss   // 休息已站满，停在锁屏页等用户点一下
     }
 
     /// 当前需要展示的浮层类型。
@@ -36,6 +37,7 @@ final class AppState: ObservableObject {
     /// 预览用的沙盒倒计时，不影响真实节奏。
     private var previewKind: Overlay?
     private var previewHardDeadline: Date?
+    private var previewsFinished = false
 
     init(settings: SettingsStore = .shared) {
         self.settings = settings
@@ -82,6 +84,11 @@ final class AppState: ObservableObject {
 
     var isPreviewing: Bool { previewKind != nil }
 
+    /// 休息站满了、停在锁屏页等用户点确认。
+    var isAwaitingDismiss: Bool {
+        previewKind != nil ? previewsFinished : phase == .awaitingDismiss
+    }
+
     var isRunning: Bool { phase != .idle }
 
     var statusHeadline: String {
@@ -90,6 +97,7 @@ final class AppState: ObservableObject {
         case .sitting: return "坐着呢"
         case .warning: return "要起来了"
         case .standing: return "站着呢"
+        case .awaitingDismiss: return "休息结束"
         }
     }
 
@@ -133,6 +141,14 @@ final class AppState: ObservableObject {
         start()
     }
 
+    /// 休息结束后用户点了「开始下一轮」。
+    func dismissBreak() {
+        guard phase == .awaitingDismiss else { return }
+        completedBreaks += 1
+        SoundPlayer.shared.play(.click)
+        startSitting()
+    }
+
     /// 立刻进入起立休息（跳过剩余久坐时间）。
     func standUpNow() {
         startStanding()
@@ -167,6 +183,15 @@ final class AppState: ObservableObject {
         syncOverlay()
     }
 
+    /// 仅供设计走查 / 宣传图：模拟「已站满、等待用户确认」的样子。
+    func previewFinished() {
+        previewKind = .lock
+        previewsFinished = true
+        previewRemaining = 0
+        previewHardDeadline = nil
+        syncOverlay()
+    }
+
     /// 仅供设计走查 / 宣传图：把锁屏浮层固定在某个剩余秒数上。
     func previewStand(at seconds: TimeInterval) {
         previewKind = .lock
@@ -186,6 +211,7 @@ final class AppState: ObservableObject {
     func endPreview() {
         guard previewKind != nil else { return }
         previewKind = nil
+        previewsFinished = false
         previewRemaining = 0
         previewHardDeadline = nil
         syncOverlay()
@@ -212,6 +238,13 @@ final class AppState: ObservableObject {
     }
 
     private func resume() {
+        if pausedPhase == .awaitingDismiss {
+            phase = .awaitingDismiss
+            deadline = nil
+            remaining = 0
+            syncOverlay()
+            return
+        }
         let duration = max(1, remaining)
         remaining = duration
         deadline = Date().addingTimeInterval(duration)
@@ -257,9 +290,18 @@ final class AppState: ObservableObject {
         case .sitting, .warning:
             startStanding()
         case .standing:
-            completedBreaks += 1
-            startSitting()
-        case .idle:
+            if settings.stayUntilDismissed {
+                // 停在锁屏页，等用户点「开始下一轮」
+                phase = .awaitingDismiss
+                remaining = 0
+                deadline = nil
+                SoundPlayer.shared.play(.release)
+                syncOverlay()
+            } else {
+                completedBreaks += 1
+                startSitting()
+            }
+        case .awaitingDismiss, .idle:
             break
         }
     }
@@ -272,7 +314,7 @@ final class AppState: ObservableObject {
         } else {
             switch phase {
             case .warning: next = .warning
-            case .standing: next = .lock
+            case .standing, .awaitingDismiss: next = .lock
             default: next = nil
             }
         }
@@ -299,7 +341,7 @@ final class AppState: ObservableObject {
             startSitting(minutes: minutes)
         case .idle:
             if !automaticallyPaused { remaining = max(1, minutes * 60) }
-        case .standing:
+        case .standing, .awaitingDismiss:
             break
         }
     }
@@ -325,7 +367,7 @@ final class AppState: ObservableObject {
         guard automaticallyPaused else { return }
         automaticallyPaused = false
         awayPaused = false
-        if pausedPhase == .standing {
+        if pausedPhase == .standing || pausedPhase == .awaitingDismiss {
             // 人已经离开过了，这次休息就算完成，别回来立刻锁屏。
             completedBreaks += 1
             startSitting()

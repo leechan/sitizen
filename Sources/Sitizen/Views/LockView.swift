@@ -12,6 +12,11 @@ struct LockView: View {
     var isPrimary: Bool = true
 
     @State private var lineIndex = 0
+    /// 点了「开始下一轮」或「认输」之后，浮层正在被拆掉。
+    /// 这段时间里不能跟着 state 切到下一轮的界面，否则会闪一下旧按钮和下一轮的读数。
+    @State private var leaving = false
+    /// 离场那一刻的剩余秒数。冻结住，免得数字跟着下一轮跳一下。
+    @State private var frozenRemaining: TimeInterval?
     @State private var confirming = false
     @State private var taunt = ""
     @State private var confirmResetWork: DispatchWorkItem?
@@ -19,11 +24,20 @@ struct LockView: View {
     private let lineTimer = Timer.publish(every: 9, on: .main, in: .common).autoconnect()
 
     private var total: TimeInterval { state.standTotal }
-    private var remaining: TimeInterval { min(max(0, state.displayRemaining), total) }
+    private var remaining: TimeInterval {
+        if let frozenRemaining { return frozenRemaining }
+        return min(max(0, state.displayRemaining), total)
+    }
     private var progress: Double { min(1, max(0, remaining / total)) }
     private var seconds: Int { max(0, Int(remaining.rounded(.up))) }
 
-    private var lines: [String] { Copy.lock(settings.sass) }
+    /// 站满待确认——包含「刚点完按钮、浮层还没消失」的那一小段。
+    private var finished: Bool { state.isAwaitingDismiss || leaving }
+
+    private var lines: [String] {
+        finished ? Copy.finished(settings.sass) : Copy.lock(settings.sass)
+    }
+
     private var currentLine: String {
         let pool = lines
         guard !pool.isEmpty else { return "" }
@@ -51,13 +65,15 @@ struct LockView: View {
                         .shadow(color: Palette.accent.opacity(0.35), radius: 40 * k)
 
                     TrackedLabel(
-                        text: isPrimary ? "休息中 · BREAK" : "休息中",
+                        text: finished
+                            ? "休息结束 · DONE"
+                            : (isPrimary ? "休息中 · BREAK" : "休息中"),
                         size: 11 * k,
                         color: Palette.accent.opacity(0.9)
                     )
                     .padding(.top, 24 * k)
 
-                    Text(Copy.lockTitle)
+                    Text(finished ? "可以坐下了" : Copy.lockTitle)
                         .font(.display((isPrimary ? 60 : 44) * k, weight: .bold))
                         .foregroundStyle(.white)
                         .padding(.top, 10 * k)
@@ -88,7 +104,7 @@ struct LockView: View {
         }
         .ignoresSafeArea()
         .onReceive(lineTimer) { _ in
-            guard isPrimary, !confirming else { return }
+            guard isPrimary, !confirming, !finished else { return }
             lineIndex += 1
         }
     }
@@ -123,50 +139,71 @@ struct LockView: View {
     @ViewBuilder
     private func footer(scale k: CGFloat) -> some View {
         VStack(spacing: 16 * k) {
-            if isPrimary {
-                if settings.allowSurrender {
-                    if confirming {
-                        Text(taunt)
-                            .font(.system(size: 14 * k, weight: .semibold))
-                            .foregroundStyle(Palette.accent)
-                            .transition(.opacity.combined(with: .move(edge: .bottom)))
+            if !isPrimary {
+                // 副屏只提示去哪儿操作，不给按钮
+                TrackedLabel(text: "请到主显示器上解锁", size: 12 * k, color: Palette.dim, weight: .medium)
+            } else if finished {
+                // 站满了：只留一个「开始下一轮」，不再有认输选项
+                FloatingPill {
+                    PillButton(
+                        title: Copy.dismissButton(settings.sass),
+                        kind: .solid,
+                        scale: k
+                    ) {
+                        beginLeaving()
+                        state.dismissBreak()
                     }
-
-                    FloatingPill {
-                        PillButton(
-                            title: confirming
-                                ? Copy.surrenderConfirm(settings.sass)
-                                : Copy.surrenderButton(settings.sass),
-                            kind: confirming ? .solid : .ghost,
-                            scale: k
-                        ) {
-                            primaryTapped()
-                        }
-
-                        if confirming {
-                            Button {
-                                resetConfirm()
-                            } label: {
-                                Text(Copy.surrenderCancel)
-                                    .font(.system(size: 14 * k, weight: .medium))
-                                    .foregroundStyle(Palette.dim)
-                                    .padding(.horizontal, 18 * k)
-                            }
-                            .buttonStyle(.plain)
-                            .transition(.opacity)
-                        }
-                    }
-                    .animation(.spring(response: 0.35, dampingFraction: 0.8), value: confirming)
-                } else {
-                    TrackedLabel(text: "本次休息结束后自动解锁", size: 11 * k, color: Palette.dim, weight: .medium)
                 }
+
+                Text("不点也行，它就一直待在这儿")
+                    .font(.system(size: 11 * k, weight: .medium))
+                    .tracking(0.8)
+                    .foregroundStyle(Palette.faint)
+            } else if settings.allowSurrender {
+                if confirming {
+                    Text(taunt)
+                        .font(.system(size: 14 * k, weight: .semibold))
+                        .foregroundStyle(Palette.accent)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
+
+                FloatingPill {
+                    PillButton(
+                        title: confirming
+                            ? Copy.surrenderConfirm(settings.sass)
+                            : Copy.surrenderButton(settings.sass),
+                        kind: confirming ? .solid : .ghost,
+                        scale: k
+                    ) {
+                        primaryTapped()
+                    }
+
+                    if confirming {
+                        Button {
+                            resetConfirm()
+                        } label: {
+                            Text(Copy.surrenderCancel)
+                                .font(.system(size: 14 * k, weight: .medium))
+                                .foregroundStyle(Palette.dim)
+                                .padding(.horizontal, 18 * k)
+                        }
+                        .buttonStyle(.plain)
+                        .transition(.opacity)
+                    }
+                }
+                .animation(.spring(response: 0.35, dampingFraction: 0.8), value: confirming)
 
                 Text("解锁后立刻开始下一轮久坐倒计时")
                     .font(.system(size: 11 * k, weight: .medium))
                     .tracking(0.8)
                     .foregroundStyle(Palette.faint)
             } else {
-                TrackedLabel(text: "请到主显示器上解锁", size: 12 * k, color: Palette.dim, weight: .medium)
+                TrackedLabel(text: "本次休息结束后自动解锁", size: 11 * k, color: Palette.dim, weight: .medium)
+
+                Text("解锁后立刻开始下一轮久坐倒计时")
+                    .font(.system(size: 11 * k, weight: .medium))
+                    .tracking(0.8)
+                    .foregroundStyle(Palette.faint)
             }
         }
         .padding(.bottom, 44 * k)
@@ -176,9 +213,10 @@ struct LockView: View {
 
     private func primaryTapped() {
         if confirming {
-            // 直接认输退出。不要在这里把 confirming 置回 false，
+            // 直接认输退出。不要重置 confirming，也不要让界面切回去，
             // 否则浮层消失前会先闪一下初始态。
             confirmResetWork?.cancel()
+            beginLeaving()
             state.surrender()
             return
         }
@@ -191,6 +229,12 @@ struct LockView: View {
         let work = DispatchWorkItem { confirming = false }
         confirmResetWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 7, execute: work)
+    }
+
+    /// 进入「即将离场」：界面整体冻结在当前这一帧，直到浮层被拆掉。
+    private func beginLeaving() {
+        frozenRemaining = remaining
+        leaving = true
     }
 
     private func resetConfirm() {

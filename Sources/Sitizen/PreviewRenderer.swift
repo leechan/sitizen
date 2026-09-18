@@ -116,6 +116,19 @@ enum PreviewRenderer {
         )
         state.endPreview()
 
+        // 站满后停留的样子（设置里开启「休息结束后停留」时）
+        state.previewFinished()
+        write(
+            ZStack {
+                MockDesktop(light: false)
+                LockView(state: state, settings: settings, isPrimary: true)
+                    .frame(width: desktop.width, height: desktop.height)
+            },
+            size: desktop,
+            to: url.appendingPathComponent("10-lock-finished.png")
+        )
+        state.endPreview()
+
         print("预览已输出到 \(url.path)")
         return true
     }

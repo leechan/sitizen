@@ -109,6 +109,31 @@ enum SelfTest {
         expect(state.phase != .idle, "restart 后不应停在 idle，实际 \(state.phase)", into: &failures)
         expect(state.remaining < settings.sitMinutes * 60, "restart 后倒计时应该已经在走", into: &failures)
 
+        // 8. 开启「休息结束后停留」：站满后应停在锁屏页，点一下才进入下一轮
+        settings.stayUntilDismissed = true
+        settings.standMinutes = 0.05   // 3 秒
+        state.reset()
+        state.standUpNow()
+        pump(3.4)
+        expect(state.phase == .awaitingDismiss, "站满后应停在待确认状态，实际 \(state.phase)", into: &failures)
+        expect(state.overlay == .lock, "待确认期间锁屏浮层不应消失", into: &failures)
+        expect(state.isAwaitingDismiss, "isAwaitingDismiss 应为 true", into: &failures)
+
+        pump(1.5)
+        expect(state.phase == .awaitingDismiss, "不点按钮就应该一直停着", into: &failures)
+
+        state.dismissBreak()
+        pump(0.4)
+        expect(state.phase == .sitting, "点确认后应进入下一轮久坐，实际 \(state.phase)", into: &failures)
+        expect(state.overlay == nil, "进入久坐后浮层应消失", into: &failures)
+
+        // 关掉开关后回到自动开始
+        settings.stayUntilDismissed = false
+        state.reset()
+        state.standUpNow()
+        pump(3.4)
+        expect(state.phase == .sitting, "关闭该选项后站满应自动开始下一轮，实际 \(state.phase)", into: &failures)
+
         print("── Sitizen 自检 ──")
         for entry in trace {
             print(String(format: "  %6.2fs  %@", entry.t, entry.text))
@@ -140,6 +165,7 @@ enum SelfTest {
         case .sitting: return "sitting"
         case .warning: return "warning"
         case .standing: return "standing"
+        case .awaitingDismiss: return "awaiting"
         }
     }
 
